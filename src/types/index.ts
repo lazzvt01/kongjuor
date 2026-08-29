@@ -69,6 +69,7 @@ export interface Emprestimo {
   saldo_devedor: number | null
   deixou_garantia: boolean
   garantia: string | null
+  observacao: string | null
   status: StatusEmprestimo
   quantidade_parcelas: number | null
   ciclo_atual: number

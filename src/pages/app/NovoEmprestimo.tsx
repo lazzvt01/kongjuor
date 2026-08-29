@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { CurrencyInput } from '@/components/shared/CurrencyInput'
@@ -24,7 +24,8 @@ import { hojeISO } from '@/services/financial'
 import { PERIODICIDADE_LABEL } from '@/services/financial'
 import { proximaDataPeriodica } from '@/services/financial/datas'
 import { resumoNovoEmprestimo } from '@/services/financial/emprestimos'
-import { criarEmprestimo } from '@/services/api/emprestimos'
+import { criarEmprestimo, editarEmprestimo, listarParcelas, obterEmprestimo } from '@/services/api/emprestimos'
+import { listarCiclos } from '@/services/api/ciclos'
 import type {
   FormaJurosParcelado,
   JurosPeriodicidade,
@@ -61,7 +62,13 @@ function formatarData(data: string): string {
 export function NovoEmprestimo() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
+  const { id: editId } = useParams<{ id: string }>()
   const { clientes, loading: carregandoClientes } = useClientesComResumo()
+
+  const editando = Boolean(editId)
+  const [carregandoEdicao, setCarregandoEdicao] = useState(editando)
+  const [cicloAberto, setCicloAberto] = useState(1)
+  const [dataInicioOriginal, setDataInicioOriginal] = useState('')
 
   const [tipo, setTipo] = useState<TipoEmprestimo>('parcelado')
   const [formaJuros, setFormaJuros] = useState<FormaJurosParcelado>('total')
@@ -85,6 +92,53 @@ export function NovoEmprestimo() {
     const c = params.get('cliente')
     if (c && clientes.some((cl) => cl.id === c)) setClienteId(c)
   }, [params, clientes])
+
+  useEffect(() => {
+    if (!editId) return
+    let ativo = true
+    setCarregandoEdicao(true)
+    void (async () => {
+      try {
+        const [emprestimo, parcelas, ciclos] = await Promise.all([
+          obterEmprestimo(editId),
+          listarParcelas(editId),
+          listarCiclos(editId),
+        ])
+        if (!ativo || !emprestimo) return
+        setTipo(emprestimo.tipo)
+        setFormaJuros(emprestimo.forma_juros ?? 'total')
+        setClienteId(emprestimo.cliente_id)
+        setValor(emprestimo.valor_principal)
+        setDataInicioOriginal(emprestimo.data_inicio)
+        setJurosTipo(emprestimo.juros_tipo)
+        setJurosValor(emprestimo.juros_valor)
+        setJurosTexto(String(emprestimo.juros_valor / 100).replace('.', ','))
+        setPeriodicidade(emprestimo.juros_periodicidade)
+        setIntervalo(emprestimo.intervalo)
+        setQuantidade((emprestimo.quantidade_parcelas ?? parcelas.length) || 1)
+        setVencimento(
+          emprestimo.tipo === 'parcelado'
+            ? (parcelas[0]?.data_vencimento ?? emprestimo.data_vencimento)
+            : emprestimo.data_vencimento,
+        )
+        setVencimentoManual(true)
+        setDeixouGarantia(emprestimo.deixou_garantia)
+        setGarantia(emprestimo.garantia ?? '')
+        setObservacao(emprestimo.observacao ?? '')
+        if (emprestimo.tipo === 'saldo_aberto') {
+          const aberto = ciclos.find((c) => c.status === 'aberto')
+          setCicloAberto(aberto?.numero_ciclo ?? emprestimo.ciclo_atual)
+        }
+      } catch (err) {
+        toast.error((err as Error).message)
+      } finally {
+        if (ativo) setCarregandoEdicao(false)
+      }
+    })()
+    return () => {
+      ativo = false
+    }
+  }, [editId])
 
   const handlePeriodicidadeChange = (p: JurosPeriodicidade) => {
     setPeriodicidade(p)
@@ -147,6 +201,31 @@ export function NovoEmprestimo() {
 
     setSubmitting(true)
     try {
+      if (editando && editId) {
+        await editarEmprestimo(
+          editId,
+          {
+            cliente_id: clienteId,
+            tipo,
+            forma_juros: tipo === 'parcelado' ? formaJuros : null,
+            valor_principal: valor,
+            juros_tipo: jurosTipo,
+            juros_valor: jurosValor,
+            juros_periodicidade: periodicidade,
+            intervalo,
+            data_inicio: editando ? dataInicioOriginal || hojeISO() : hojeISO(),
+            data_vencimento: vencimento,
+            quantidade_parcelas: tipo === 'parcelado' ? quantidade : undefined,
+            deixou_garantia: deixouGarantia,
+            garantia: deixouGarantia ? garantia : undefined,
+            observacao: observacao.trim() || undefined,
+          },
+          cicloAberto,
+        )
+        toast.success('Empréstimo atualizado com sucesso!')
+        navigate(`/emprestimos/${editId}`, { replace: true })
+        return
+      }
       const id = await criarEmprestimo({
         cliente_id: clienteId,
         tipo,
@@ -171,9 +250,26 @@ export function NovoEmprestimo() {
     }
   }
 
+  if (carregandoEdicao) {
+    return (
+      <div className="space-y-4">
+        <PageHeader
+          title="Editar empréstimo"
+          backTo={editId ? `/emprestimos/${editId}` : '/emprestimos'}
+        />
+        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
-      <PageHeader title="Novo empréstimo" subtitle="Defina os valores e condições" backTo="/emprestimos/novo" />
+      <PageHeader
+        title={editando ? 'Editar empréstimo' : 'Novo empréstimo'}
+        subtitle={editando ? 'Revise os valores e condições' : 'Defina os valores e condições'}
+        backTo={editando && editId ? `/emprestimos/${editId}` : '/emprestimos/novo'}
+      />
 
       <Card>
         <CardHeader className="p-5 pb-3">
@@ -185,11 +281,12 @@ export function NovoEmprestimo() {
             <button
               key={opt.valor}
               onClick={() => setTipo(opt.valor)}
+              disabled={editando}
               className={`rounded-xl border-2 p-4 text-left transition-colors ${
                 tipo === opt.valor
                   ? 'border-primary bg-primary/5'
                   : 'border-input hover:border-primary/40'
-              }`}
+              } ${editando && tipo !== opt.valor ? 'cursor-not-allowed opacity-40' : ''}`}
             >
               <p className="text-sm font-semibold">{opt.label}</p>
               <p className="mt-0.5 text-xs text-muted-foreground">{opt.descricao}</p>
@@ -208,7 +305,7 @@ export function NovoEmprestimo() {
             {carregandoClientes ? (
               <Skeleton className="h-11" />
             ) : (
-              <Select value={clienteId} onValueChange={setClienteId}>
+              <Select value={clienteId} onValueChange={setClienteId} disabled={editando}>
                 <SelectTrigger id="cliente">
                   <SelectValue placeholder="Selecione o cliente" />
                 </SelectTrigger>
@@ -418,7 +515,13 @@ export function NovoEmprestimo() {
       )}
 
       <Button size="xl" className="w-full" onClick={handleSubmit} disabled={submitting}>
-        {submitting ? 'Criando...' : 'Confirmar empréstimo'}
+        {submitting
+          ? editando
+            ? 'Salvando...'
+            : 'Criando...'
+          : editando
+            ? 'Salvar alterações'
+            : 'Confirmar empréstimo'}
       </Button>
     </div>
   )

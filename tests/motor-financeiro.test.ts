@@ -44,6 +44,7 @@ function emprestimoSaldoAberto(parcial: Partial<Emprestimo> = {}): Emprestimo {
     status: 'ativo',
     deixou_garantia: false,
     garantia: null,
+    observacao: null,
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
     ...parcial,

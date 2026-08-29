@@ -1,5 +1,17 @@
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CalendarClock, ChevronRight, HandCoins, RefreshCw, ShieldCheck, TrendingUp, UserRound } from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  CalendarClock,
+  ChevronRight,
+  HandCoins,
+  Pencil,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+  TrendingUp,
+  UserRound,
+} from 'lucide-react'
 
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Money } from '@/components/shared/Money'
@@ -8,8 +20,10 @@ import { StatusEmprestimoBadge, StatusParcelaBadge } from '@/components/shared/S
 import { Timeline } from '@/components/shared/Timeline'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useEmprestimoDetalhe } from '@/hooks/useEmprestimoDetalhe'
+import { excluirEmprestimo } from '@/services/api/emprestimos'
 import { formatarData } from '@/services/financial'
 import { diasAtrasoEmprestimo } from '@/services/financial'
 import { detalhesParcelado } from '@/services/financial'
@@ -21,6 +35,8 @@ export function DetalheEmprestimo() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data, loading } = useEmprestimoDetalhe(id)
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false)
+  const [excluindo, setExcluindo] = useState(false)
 
   if (loading) {
     return (
@@ -54,6 +70,20 @@ export function DetalheEmprestimo() {
   const parcelaAtual =
     data.parcelas.find((p) => p.saldo > 0) ?? data.parcelas[data.parcelas.length - 1]
   const parcelaVencimentoAtual = parcelaAtual?.data_vencimento ?? emprestimo.data_vencimento
+
+  const handleExcluir = async () => {
+    if (!id) return
+    setExcluindo(true)
+    try {
+      await excluirEmprestimo(id)
+      toast.success('Empréstimo excluído.')
+      navigate('/emprestimos', { replace: true })
+    } catch (err) {
+      toast.error((err as Error).message)
+      setExcluindo(false)
+      setConfirmarExclusao(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -180,6 +210,27 @@ export function DetalheEmprestimo() {
           </CardContent>
         </Card>
       )}
+
+      <div className="flex gap-3">
+        <Button
+          size="lg"
+          variant="outline"
+          className="flex-1"
+          onClick={() => navigate(`/emprestimos/${emprestimo.id}/editar`)}
+        >
+          <Pencil className="h-5 w-5" />
+          Editar
+        </Button>
+        <Button
+          size="lg"
+          variant="destructive"
+          className="flex-1"
+          onClick={() => setConfirmarExclusao(true)}
+        >
+          <Trash2 className="h-5 w-5" />
+          Excluir
+        </Button>
+      </div>
 
       <div className="flex gap-3">
         <Button
@@ -316,6 +367,33 @@ export function DetalheEmprestimo() {
           </CardContent>
         </Card>
       </section>
+
+      <Dialog open={confirmarExclusao} onOpenChange={(open) => !open && setConfirmarExclusao(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Excluir empréstimo?
+            </DialogTitle>
+            <DialogDescription>
+              Esta ação apaga permanentemente o empréstimo, suas parcelas, ciclos, pagamentos e
+              renovações. O histórico do cliente será recalculado. Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              variant="outline"
+              disabled={excluindo}
+              onClick={() => setConfirmarExclusao(false)}
+            >
+              Cancelar
+            </Button>
+            <Button variant="destructive" disabled={excluindo} onClick={handleExcluir}>
+              {excluindo ? 'Excluindo...' : 'Excluir definitivamente'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

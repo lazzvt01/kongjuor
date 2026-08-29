@@ -106,6 +106,7 @@ export function construirEmprestimo(input: NovoEmprestimoInput): {
     saldo_devedor: saldoDevedorFinal,
     deixou_garantia: input.deixou_garantia ?? false,
     garantia: input.garantia?.trim() || null,
+    observacao: input.observacao?.trim() || null,
     status: 'ativo',
     quantidade_parcelas: quantidadeParcelas,
     ciclo_atual: 1,

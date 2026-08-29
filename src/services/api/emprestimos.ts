@@ -89,6 +89,60 @@ export async function criarEmprestimo(input: NovoEmprestimoInput): Promise<strin
   return data as string
 }
 
+export async function editarEmprestimo(
+  id: string,
+  input: NovoEmprestimoInput,
+  numeroCicloAberto: number,
+): Promise<void> {
+  const { emprestimo, parcelas, ciclos } = construirEmprestimo(input)
+
+  const parcelasArray = parcelas
+    ? parcelas.map((p) => ({
+        numero: p.numero,
+        data_vencimento: p.data_vencimento,
+        valor_principal: p.valor_principal,
+        valor_juros: p.valor_juros,
+        valor_total: p.valor_total,
+      }))
+    : null
+
+  const ciclosArray = ciclos
+    ? ciclos.map((c) => ({
+        numero_ciclo: numeroCicloAberto,
+        saldo_principal_inicial: c.saldo_principal_inicial,
+        juros_calculado: c.juros_calculado,
+        juros_devido: c.juros_devido,
+        data_inicio: c.data_inicio,
+        data_vencimento: c.data_vencimento,
+      }))
+    : null
+
+  const { error } = await supabase.rpc('editar_emprestimo', {
+    p_emprestimo: id,
+    p_valor_principal: emprestimo.valor_principal,
+    p_juros_tipo: emprestimo.juros_tipo,
+    p_juros_valor: emprestimo.juros_valor,
+    p_juros_periodicidade: emprestimo.juros_periodicidade,
+    p_intervalo: emprestimo.intervalo,
+    p_data_inicio: emprestimo.data_inicio,
+    p_data_vencimento: emprestimo.data_vencimento,
+    p_forma_juros: emprestimo.forma_juros ?? 'total',
+    p_quantidade_parcelas: emprestimo.quantidade_parcelas,
+    p_parcelas: parcelasArray,
+    p_ciclos: ciclosArray,
+    p_deixou_garantia: emprestimo.deixou_garantia,
+    p_garantia: emprestimo.garantia,
+    p_observacao: input.observacao?.trim() || null,
+  })
+  if (error) throw new Error(error.message)
+  void supabase.rpc('recalcular_score', { p_cliente: input.cliente_id })
+}
+
+export async function excluirEmprestimo(id: string): Promise<void> {
+  const { error } = await supabase.rpc('excluir_emprestimo', { p_emprestimo: id })
+  if (error) throw new Error(error.message)
+}
+
 export async function listarParcelas(emprestimoId: string): Promise<Parcela[]> {
   const { data, error } = await supabase
     .from('parcelas')

@@ -53,6 +53,7 @@ export function App() {
             <Route path="/emprestimos/novo/novo-cliente" element={<NovoClienteRapido />} />
             <Route path="/emprestimos/novo/definir" element={<NovoEmprestimo />} />
             <Route path="/emprestimos/:id" element={<DetalheEmprestimo />} />
+            <Route path="/emprestimos/:id/editar" element={<NovoEmprestimo />} />
             <Route path="/emprestimos/:id/pagamento" element={<Pagamento />} />
             <Route path="/emprestimos/:id/renovar" element={<Renovacao />} />
             <Route path="/receber" element={<Receber />} />
