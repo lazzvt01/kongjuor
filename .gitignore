@@ -13,6 +13,10 @@ dist-ssr
 dev-dist
 *.local
 
+# Supabase CLI artifacts
+supabase/.temp/
+supabase/.branches/
+
 # Environment
 .env
 .env.*

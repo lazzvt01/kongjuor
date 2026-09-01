@@ -13,14 +13,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Field } from '@/components/shared/Field'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { useAuth } from '@/hooks/useAuth'
 import { usePlano } from '@/hooks/usePlano'
+import { validarCpfCnpj } from '@/lib/validations'
+import { atualizarPerfil } from '@/services/api/auth'
 import { assinarPlano, formatarPrecoPlano, listarPlanos } from '@/services/api/planos'
 import type { CheckoutPix, CodigoPlano, Plano } from '@/types'
 
 export function Planos() {
   const navigate = useNavigate()
+  const { profile, refresh: refreshPerfil } = useAuth()
   const { resumo, limiteAtingido, refresh } = usePlano()
   const [planos, setPlanos] = useState<Plano[]>([])
   const [loadingPlanos, setLoadingPlanos] = useState(true)
@@ -28,6 +34,10 @@ export function Planos() {
   const [checkoutPlano, setCheckoutPlano] = useState<{ plano: Plano; pix: CheckoutPix } | null>(null)
   const [copiado, setCopiado] = useState(false)
   const [cancelando, setCancelando] = useState(false)
+  const [pedirDoc, setPedirDoc] = useState<Plano | null>(null)
+  const [doc, setDoc] = useState(profile?.cpf_cnpj ?? '')
+  const [docError, setDocError] = useState<string | null>(null)
+  const [salvandoDoc, setSalvandoDoc] = useState(false)
 
   useEffect(() => {
     listarPlanos()
@@ -58,9 +68,20 @@ export function Planos() {
       return
     }
 
+    if (!profile?.cpf_cnpj) {
+      setDoc('')
+      setDocError(null)
+      setPedirDoc(plano)
+      return
+    }
+
+    await executarAssinatura(plano, profile.cpf_cnpj)
+  }
+
+  const executarAssinatura = async (plano: Plano, cpfCnpj: string) => {
     setAssinando(plano.codigo)
     try {
-      const result = await assinarPlano(plano.codigo, 'assinar')
+      const result = await assinarPlano(plano.codigo, 'assinar', cpfCnpj)
       if (!result.ok) {
         toast.error(result.error ?? 'Erro ao gerar o Pix.')
         return
@@ -75,6 +96,25 @@ export function Planos() {
       toast.error((err as Error).message)
     } finally {
       setAssinando(null)
+    }
+  }
+
+  const handleSalvarDoc = async () => {
+    if (!pedirDoc) return
+    const err = validarCpfCnpj(doc)
+    setDocError(err)
+    if (err) return
+    setSalvandoDoc(true)
+    try {
+      await atualizarPerfil({ nome: profile?.nome ?? '', whatsapp: profile?.whatsapp ?? '', cpf_cnpj: doc.replace(/\D/g, '') })
+      await refreshPerfil()
+      const plano = pedirDoc
+      setPedirDoc(null)
+      await executarAssinatura(plano, doc.replace(/\D/g, ''))
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setSalvandoDoc(false)
     }
   }
 
@@ -213,6 +253,37 @@ export function Planos() {
       <Button variant="ghost" className="w-full" onClick={() => navigate(-1)}>
         Voltar
       </Button>
+
+      <Dialog open={pedirDoc !== null} onOpenChange={(open) => !open && setPedirDoc(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown className="h-5 w-5 text-primary" />
+              Assinar {pedirDoc?.nome}
+            </DialogTitle>
+            <DialogDescription>
+              Para gerar a cobrança, o Asaas precisa do seu CPF ou CNPJ (do titular da conta).
+              Ele é usado apenas para emitir a cobrança recorrente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Field label="CPF ou CNPJ" error={docError ?? undefined}>
+              <Input
+                value={doc}
+                onChange={(e) => setDoc(e.target.value)}
+                placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                inputMode="numeric"
+                maxLength={18}
+              />
+            </Field>
+            <Button className="w-full" onClick={handleSalvarDoc} disabled={salvandoDoc}>
+              {salvandoDoc && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Continuar e gerar Pix
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={checkoutPlano !== null} onOpenChange={(open) => !open && setCheckoutPlano(null)}>
         <DialogContent className="max-w-md">

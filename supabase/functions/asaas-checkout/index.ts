@@ -3,7 +3,7 @@
 // retorna o Pix da primeira cobrança (QR + copia-e-cola).
 //
 // Body:
-//   { plano: 'basico'|'pro'|'pro_max', acao: 'assinar'|'cancelar' }
+//   { plano: 'basico'|'pro'|'pro_max', acao: 'assinar'|'cancelar', cpfCnpj?: string }
 //
 // Deploy:
 //   supabase secrets set ASAAS_API_KEY=... ASAAS_API_URL=https://sandbox.asaas.com/api/v3
@@ -43,24 +43,35 @@ function asaasHeaders(): Record<string, string> {
   }
 }
 
-async function getOrCreateCustomer(credorId: string): Promise<string> {
+async function getOrCreateCustomer(credorId: string, cpfCnpj?: string): Promise<string> {
   const { data: assinatura } = await supabase
     .from('assinaturas')
     .select('asaas_customer_id')
     .eq('credor_id', credorId)
     .maybeSingle()
 
-  if (assinatura?.asaas_customer_id) return assinatura.asaas_customer_id
+  const doc = cpfCnpj?.replace(/[^0-9]/g, '')
+  if (assinatura?.asaas_customer_id) {
+    if (doc) {
+      await fetch(`${ASAAS_API_URL}/customers/${assinatura.asaas_customer_id}`, {
+        method: 'POST',
+        headers: asaasHeaders(),
+        body: JSON.stringify({ cpfCnpj: doc }),
+      })
+    }
+    return assinatura.asaas_customer_id
+  }
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('nome, email')
+    .select('nome, email, cpf_cnpj')
     .eq('id', credorId)
     .single()
 
   const body = {
     name: profile?.nome ?? 'Cliente KONGjuros',
     email: profile?.email ?? undefined,
+    ...(doc ?? profile?.cpf_cnpj ? { cpfCnpj: doc ?? profile?.cpf_cnpj } : {}),
   }
 
   const res = await fetch(`${ASAAS_API_URL}/customers`, {
@@ -150,7 +161,7 @@ Deno.serve(async (req) => {
     return json({ error: 'Não autorizado' }, 401)
   }
 
-  let body: { plano?: string; acao?: string }
+  let body: { plano?: string; acao?: string; cpfCnpj?: string }
   try {
     body = await req.json()
   } catch {
@@ -159,6 +170,14 @@ Deno.serve(async (req) => {
 
   const plano = body.plano ?? ''
   const acao = body.acao ?? 'assinar'
+
+  const cpfCnpj = body.cpfCnpj?.replace(/[^0-9]/g, '') ?? ''
+  if (cpfCnpj) {
+    await supabase
+      .from('profiles')
+      .update({ cpf_cnpj: cpfCnpj })
+      .eq('id', user.id)
+  }
 
   if (acao === 'cancelar') {
     const { data: assinatura } = await supabase
@@ -206,7 +225,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const customerId = await getOrCreateCustomer(user.id)
+    const customerId = await getOrCreateCustomer(user.id, cpfCnpj)
 
     const { data: assinaturaAtual } = await supabase
       .from('assinaturas')

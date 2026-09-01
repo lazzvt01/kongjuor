@@ -31,9 +31,13 @@ export async function obterAssinatura(): Promise<Assinatura | null> {
   return (data as Assinatura | null) ?? null
 }
 
-export async function assinarPlano(plano: CodigoPlano, acao: 'assinar' | 'cancelar'): Promise<CheckoutResult> {
+export async function assinarPlano(
+  plano: CodigoPlano,
+  acao: 'assinar' | 'cancelar',
+  cpfCnpj?: string,
+): Promise<CheckoutResult> {
   const { data, error } = await supabase.functions.invoke('asaas-checkout', {
-    body: { plano, acao },
+    body: { plano, acao, ...(cpfCnpj ? { cpfCnpj } : {}) },
   })
   if (error) throw new Error(error.message)
   return (data as CheckoutResult) ?? { ok: false, error: 'Resposta vazia da Edge Function' }

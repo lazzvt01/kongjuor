@@ -4,6 +4,7 @@ export interface Profile {
   email: string
   whatsapp: string | null
   whatsapp_normalizado: string | null
+  cpf_cnpj: string | null
   created_at: string
   updated_at: string
 }

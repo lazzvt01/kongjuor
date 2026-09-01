@@ -25,6 +25,46 @@ export function validarRepetirSenha(senha: string, repetir: string): string | nu
   return null
 }
 
+export function validarCpfCnpj(valor: string): string | null {
+  const limpo = valor.replace(/\D/g, '')
+  if (!limpo) return 'Informe o CPF ou CNPJ.'
+  if (limpo.length === 11) {
+    if (!validarCpf(limpo)) return 'CPF inválido.'
+    return null
+  }
+  if (limpo.length === 14) {
+    if (!validarCnpj(limpo)) return 'CNPJ inválido.'
+    return null
+  }
+  return 'CPF deve ter 11 dígitos ou CNPJ 14 dígitos.'
+}
+
+function validarCpf(cpf: string): boolean {
+  if (/^(\d)\1{10}$/.test(cpf)) return false
+  for (let j = 9; j <= 10; j++) {
+    let soma = 0
+    for (let i = 0; i < j; i++) soma += Number(cpf[i]) * (j + 1 - i)
+    const digito = ((soma * 10) % 11) % 10
+    if (digito !== Number(cpf[j])) return false
+  }
+  return true
+}
+
+function validarCnpj(cnpj: string): boolean {
+  if (/^(\d)\1{13}$/.test(cnpj)) return false
+  const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+  const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+  let soma1 = 0
+  for (let i = 0; i < 12; i++) soma1 += Number(cnpj[i]) * pesos1[i]
+  const d1 = soma1 % 11 < 2 ? 0 : 11 - (soma1 % 11)
+  if (d1 !== Number(cnpj[12])) return false
+  let soma2 = 0
+  for (let i = 0; i < 13; i++) soma2 += Number(cnpj[i]) * pesos2[i]
+  const d2 = soma2 % 11 < 2 ? 0 : 11 - (soma2 % 11)
+  if (d2 !== Number(cnpj[13])) return false
+  return true
+}
+
 export function validarValor(centavos: number): string | null {
   if (centavos <= 0) return 'Informe um valor maior que zero.'
   return null

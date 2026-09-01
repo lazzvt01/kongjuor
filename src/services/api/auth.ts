@@ -83,7 +83,11 @@ export async function obterPerfil(): Promise<Profile | null> {
   return (data as Profile | null) ?? null
 }
 
-export async function atualizarPerfil(dados: { nome: string; whatsapp: string }) {
+export async function atualizarPerfil(dados: {
+  nome: string
+  whatsapp: string
+  cpf_cnpj?: string | null
+}) {
   const whatsappNormalizado = normalizarWhatsApp(dados.whatsapp)
   const { data, error } = await supabase
     .from('profiles')
@@ -91,6 +95,7 @@ export async function atualizarPerfil(dados: { nome: string; whatsapp: string })
       nome: dados.nome,
       whatsapp: dados.whatsapp,
       whatsapp_normalizado: whatsappNormalizado,
+      ...(dados.cpf_cnpj !== undefined ? { cpf_cnpj: dados.cpf_cnpj ?? null } : {}),
     })
     .eq('id', (await supabase.auth.getUser()).data.user?.id ?? '')
     .select()

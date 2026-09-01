@@ -100,6 +100,11 @@ No painel do Asaas (sandbox): **Configurações → Webhooks**.
 - **Sandbox**: use a chave Asaas com prefixo `aact_hmlg_`. Os Pix gerados são de
   teste; para pagar de verdade é preciso chave de produção (`ASAAS_API_URL` =
   `https://api.asaas.com/v3`).
+- **CPF/CNPJ obrigatório**: o Asaas exige o documento do cliente para criar a
+  cobrança. O app coleta `cpf_cnpj` no perfil (Meu Perfil) ou no momento de
+  assinar (dialog em /planos) e salva em `profiles.cpf_cnpj` (migração 0008). A
+  Edge Function `asaas-checkout` envia o documento ao Asaas (customer e, se já
+  existente, atualização via POST /customers/{id}).
 - **Upgrade/downgrade**: reutiliza a mesma assinatura Asaas e apenas atualiza o
   valor cobrado; não gera duplicidade.
 - **Pro Max** (`limite_ativos = null`) nunca bloqueia a criação.

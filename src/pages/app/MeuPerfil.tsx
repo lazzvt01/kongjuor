@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/hooks/useAuth'
 import { usePlano } from '@/hooks/usePlano'
-import { validarNome, validarWhatsappCampo } from '@/lib/validations'
+import { validarCpfCnpj, validarNome, validarWhatsappCampo } from '@/lib/validations'
 import { atualizarPerfil } from '@/services/api/auth'
 
 export function MeuPerfil() {
@@ -21,6 +21,7 @@ export function MeuPerfil() {
   const navigate = useNavigate()
   const [nome, setNome] = useState(profile?.nome ?? '')
   const [whatsapp, setWhatsapp] = useState(profile?.whatsapp ?? '')
+  const [cpfCnpj, setCpfCnpj] = useState(profile?.cpf_cnpj ?? '')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
 
@@ -31,12 +32,20 @@ export function MeuPerfil() {
     if (nomeErr) erros.nome = nomeErr
     const whatsErr = validarWhatsappCampo(whatsapp)
     if (whatsErr) erros.whatsapp = whatsErr
+    if (cpfCnpj.trim()) {
+      const docErr = validarCpfCnpj(cpfCnpj)
+      if (docErr) erros.cpf_cnpj = docErr
+    }
     setErrors(erros)
     if (Object.keys(erros).length > 0) return
 
     setSaving(true)
     try {
-      await atualizarPerfil({ nome, whatsapp })
+      await atualizarPerfil({
+        nome,
+        whatsapp,
+        cpf_cnpj: cpfCnpj.trim() ? cpfCnpj.replace(/\D/g, '') : null,
+      })
       await refresh()
       toast.success('Perfil atualizado com sucesso!')
       navigate('/configuracoes', { replace: true })
@@ -102,6 +111,19 @@ export function MeuPerfil() {
         </Field>
         <Field label="WhatsApp" error={errors.whatsapp}>
           <PhoneInput value={whatsapp} onChange={setWhatsapp} />
+        </Field>
+        <Field
+          label="CPF ou CNPJ"
+          hint="Obrigatório para assinar um plano pago (usado na cobrança Asaas)"
+          error={errors.cpf_cnpj}
+        >
+          <Input
+            value={cpfCnpj}
+            onChange={(e) => setCpfCnpj(e.target.value)}
+            placeholder="000.000.000-00 ou 00.000.000/0000-00"
+            inputMode="numeric"
+            maxLength={18}
+          />
         </Field>
         <Button type="submit" size="lg" className="w-full" disabled={saving}>
           {saving ? 'Salvando...' : 'Salvar alterações'}
